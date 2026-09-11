@@ -16,11 +16,11 @@ val hasReleaseSigning = listOf(
 ).all { !it.isNullOrBlank() }
 
 android {
-    namespace = "com.carecircle.medtracker"
+    namespace = "com.medikin.tracker"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.carecircle.medtracker"
+        applicationId = "com.medikin.tracker"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

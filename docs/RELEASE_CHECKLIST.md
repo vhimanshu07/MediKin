@@ -4,7 +4,7 @@ The project already targets Android API 36, disables cleartext traffic and cloud
 
 Before a public Google Play launch:
 
-1. Confirm ownership of the application ID `com.carecircle.medtracker`; change it before the first upload if needed because Play application IDs are permanent.
+1. Confirm ownership of the application ID `com.medikin.tracker`. Keep it unchanged after the first Play upload because Play application IDs are permanent.
 2. Create the Play Console app, opt into Play App Signing, and create a private upload key. Never commit the keystore or passwords.
 3. Put these entries in the user-level `~/.gradle/gradle.properties` (not this repository), then rebuild the bundle:
 

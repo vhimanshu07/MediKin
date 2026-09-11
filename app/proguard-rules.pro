@@ -1,2 +1,2 @@
 -keepattributes Signature
--keep class com.carecircle.medtracker.domain.** { *; }
+-keep class com.medikin.tracker.domain.** { *; }

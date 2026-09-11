@@ -28,9 +28,12 @@ MediKin is an organizational aid and not a medical device. Always follow instruc
 
 - `store-assets/medikin-play-store-icon-512.png`
 - `store-assets/feature-graphic-1024x500.png`
+- `store-assets/screenshots/play/01-today-medicines-1212x2424.png`
+- `store-assets/screenshots/play/02-add-custom-time-1212x2424.png`
+- `store-assets/screenshots/play/03-medicine-stock-refill-1212x2424.png`
+- `store-assets/screenshots/play/04-family-missed-dose-1212x2424.png`
 
 Still needed before submission:
 
-- At least two phone screenshots from a physical device/emulator
 - Support email and hosted privacy-policy URL
-- Signed production App Bundle uploaded through Play App Signing
+- Upload the signed production App Bundle through Play App Signing

@@ -9,9 +9,20 @@
   Built with Kotlin, Jetpack Compose, Material 3, and an MVVM-style architecture.
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/medikin-home.png" width="320" alt="MediKin empty home screen">
-</p>
+<table align="center">
+  <tr>
+    <td align="center"><img src="store-assets/screenshots/play/01-today-medicines-1212x2424.png" width="210" alt="MediKin Today screen with scheduled medicines"></td>
+    <td align="center"><img src="store-assets/screenshots/play/02-add-custom-time-1212x2424.png" width="210" alt="Add medicine form with custom time picker"></td>
+    <td align="center"><img src="store-assets/screenshots/play/03-medicine-stock-refill-1212x2424.png" width="210" alt="Medicine stock and refill screen"></td>
+    <td align="center"><img src="store-assets/screenshots/play/04-family-missed-dose-1212x2424.png" width="210" alt="Family and missed-dose check-in screen"></td>
+  </tr>
+  <tr>
+    <td align="center">Today's medicines</td>
+    <td align="center">Custom reminder time</td>
+    <td align="center">Stock and refills</td>
+    <td align="center">Family check-ins</td>
+  </tr>
+</table>
 
 ## About
 
