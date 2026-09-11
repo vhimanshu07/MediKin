@@ -5,6 +5,7 @@
 keystore.properties
 *.apk
 *.aab
+/release-signing/
 .gradle/
 .idea/
 local.properties
