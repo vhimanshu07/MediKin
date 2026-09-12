@@ -5,8 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.util.TimeZone
+import org.junit.After
 
 class DosePlannerTest {
+    private val originalTimeZone = TimeZone.getDefault()
     private val date = LocalDate.of(2026, 9, 11)
     private val medicine = Medicine(
         id = "med-1",
@@ -129,6 +132,69 @@ class DosePlannerTest {
     @Test
     fun `custom reminder key round trips through alarm extras`() {
         assertEquals(DoseTime(22, 17), DoseTime.parse(DoseTime(22, 17).key))
+    }
+
+    @Test
+    fun `weekday and date range control daily occurrences`() {
+        val mondayOnly = medicine.copy(
+            weekdays = setOf(1),
+            startDate = "2026-09-14",
+            endDate = "2026-09-21",
+        )
+
+        assertTrue(DosePlanner.dosesFor(LocalDate.of(2026, 9, 13), at(7, 0), listOf(mondayOnly), emptyList()).isEmpty())
+        assertEquals(2, DosePlanner.dosesFor(LocalDate.of(2026, 9, 14), at(7, 0), listOf(mondayOnly), emptyList()).size)
+        assertTrue(DosePlanner.dosesFor(LocalDate.of(2026, 9, 22), at(7, 0), listOf(mondayOnly), emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `interval schedule produces occurrences from its anchor`() {
+        val interval = medicine.copy(
+            scheduleType = ScheduleType.INTERVAL,
+            intervalHours = 8,
+            startDate = "2026-09-11",
+            scheduledDoses = listOf(ScheduledDose(DoseTime.MORNING, "500 mg", 2)),
+        )
+
+        assertEquals(
+            listOf(DoseTime(0, 0), DoseTime(8, 0), DoseTime(16, 0)),
+            interval.scheduledDosesOn(LocalDate.of(2026, 9, 12)).map { it.time },
+        )
+        assertEquals("500 mg", interval.doseAt(DoseTime(16, 0)).dosage)
+        assertEquals(2, interval.doseAt(DoseTime(16, 0)).stockUse)
+    }
+
+    @Test
+    fun `different scheduled times can carry different doses`() {
+        val varied = medicine.copy(
+            scheduledDoses = listOf(
+                ScheduledDose(DoseTime.MORNING, "5 mg", 1),
+                ScheduledDose(DoseTime.EVENING, "10 mg", 2),
+            ),
+        )
+
+        val evening = DosePlanner.dosesFor(date, at(7, 0), listOf(varied), emptyList()).last()
+
+        assertEquals("10 mg", evening.displayDosage)
+        assertEquals(2, evening.scheduledDose.stockUse)
+    }
+
+    @Test
+    fun `next wall clock occurrence spans daylight saving transition`() {
+        TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"))
+        val daily = medicine.copy(times = listOf(DoseTime.MORNING), startDate = "2026-03-01")
+        val before = LocalDateTime.of(2026, 3, 7, 9, 0)
+
+        val result = checkNotNull(DosePlanner.nextOccurrenceMillis(daily, before)).second
+        val expected = LocalDateTime.of(2026, 3, 8, 8, 0)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+        assertEquals(expected, result)
+    }
+
+    @After
+    fun restoreTimeZone() {
+        TimeZone.setDefault(originalTimeZone)
     }
 
     private fun at(hour: Int, minute: Int) = LocalDateTime.of(2026, 9, 11, hour, minute)

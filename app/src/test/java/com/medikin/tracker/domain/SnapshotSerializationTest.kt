@@ -30,5 +30,8 @@ class SnapshotSerializationTest {
         val restored = trackerGson().fromJson(json, TrackerSnapshot::class.java)
 
         assertEquals(listOf(DoseTime.MORNING, DoseTime(22, 17)), restored.medicines.single().times)
+        assertEquals(ScheduleType.DAILY, restored.medicines.single().effectiveScheduleType)
+        assertEquals(Medicine.ALL_WEEKDAYS, restored.medicines.single().effectiveWeekdays)
+        assertEquals("doses", restored.medicines.single().effectiveStockUnit)
     }
 }

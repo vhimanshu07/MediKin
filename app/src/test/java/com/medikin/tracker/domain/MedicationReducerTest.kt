@@ -57,6 +57,45 @@ class MedicationReducerTest {
     }
 
     @Test
+    fun `changing taken dose to skipped restores consumed stock`() {
+        val taken = MedicationReducer.recordDose(snapshot, "med-1", DoseTime.EVENING, DoseStatus.TAKEN, now)
+
+        val corrected = MedicationReducer.changeDoseStatus(
+            taken,
+            "med-1",
+            DoseTime.EVENING,
+            DoseStatus.SKIPPED,
+            now.plusMinutes(2),
+        )
+
+        assertEquals(2, corrected.medicines.single().stock)
+        assertEquals(DoseStatus.SKIPPED, corrected.logs.single().status)
+    }
+
+    @Test
+    fun `undoing taken dose removes log and restores stock`() {
+        val taken = MedicationReducer.recordDose(snapshot, "med-1", DoseTime.EVENING, DoseStatus.TAKEN, now)
+
+        val undone = MedicationReducer.changeDoseStatus(taken, "med-1", DoseTime.EVENING, null, now.plusMinutes(2))
+
+        assertEquals(2, undone.medicines.single().stock)
+        assertTrue(undone.logs.isEmpty())
+    }
+
+    @Test
+    fun `editing medicine replaces details without changing identity`() {
+        val result = MedicationReducer.updateMedicine(
+            snapshot,
+            medicine.copy(name = "Metformin XR", dosage = "750 mg", stock = 20),
+        )
+
+        assertEquals("med-1", result.medicines.single().id)
+        assertEquals("Metformin XR", result.medicines.single().name)
+        assertEquals("750 mg", result.medicines.single().dosage)
+        assertEquals(20, result.medicines.single().stock)
+    }
+
+    @Test
     fun `taking dose with empty stock never creates negative stock`() {
         val empty = snapshot.copy(medicines = listOf(medicine.copy(stock = 0)))
 
@@ -86,22 +125,53 @@ class MedicationReducerTest {
     }
 
     @Test
-    fun `deleting medicine also removes its logs`() {
+    fun `deleting medicine keeps a self describing history log`() {
         val withLog = MedicationReducer.recordDose(snapshot, "med-1", DoseTime.EVENING, DoseStatus.TAKEN, now)
 
         val result = MedicationReducer.delete(withLog, "med-1")
 
         assertTrue(result.medicines.isEmpty())
-        assertTrue(result.logs.isEmpty())
+        assertEquals(1, result.logs.size)
+        assertEquals("Metformin", result.logs.single().medicineName)
     }
 
     @Test
-    fun `log pruning keeps only recent history`() {
-        val old = DoseLog("med-1", "2026-07-01", DoseTime.EVENING, DoseStatus.TAKEN, "2026-07-01T20:00")
-        val recent = old.copy(date = "2026-09-10", recordedAt = "2026-09-10T20:00")
+    fun `elapsed unrecorded doses are materialized as missed history`() {
+        val tracked = medicine.copy(
+            createdDate = "2026-09-10",
+            times = listOf(DoseTime.MORNING),
+        )
 
-        val result = MedicationReducer.pruneLogs(snapshot.copy(logs = listOf(old, recent)), LocalDate.of(2026, 9, 11))
+        val result = MedicationReducer.materializeMissedHistory(
+            TrackerSnapshot(medicines = listOf(tracked)),
+            LocalDate.of(2026, 9, 11),
+            LocalDateTime.of(2026, 9, 11, 7, 0),
+        )
 
-        assertEquals(listOf(recent), result.logs)
+        assertEquals(1, result.logs.size)
+        assertEquals("2026-09-10", result.logs.single().date)
+        assertEquals(DoseStatus.MISSED, result.logs.single().status)
+        assertEquals("Metformin", result.logs.single().medicineName)
+    }
+
+    @Test
+    fun `temporary pause can be resumed without marking paused dates missed`() {
+        val tracked = medicine.copy(createdDate = "2026-09-11")
+        val paused = MedicationReducer.pauseMedicine(
+            TrackerSnapshot(medicines = listOf(tracked)),
+            tracked.id,
+            LocalDate.of(2026, 9, 17),
+            LocalDate.of(2026, 9, 11),
+        )
+
+        assertTrue(paused.medicines.single().isPausedOn(LocalDate.of(2026, 9, 12)))
+        val resumed = MedicationReducer.pauseMedicine(
+            paused,
+            tracked.id,
+            null,
+            LocalDate.of(2026, 9, 13),
+        )
+        assertTrue(resumed.medicines.single().isPausedOn(LocalDate.of(2026, 9, 12)))
+        assertTrue(!resumed.medicines.single().isPausedOn(LocalDate.of(2026, 9, 13)))
     }
 }

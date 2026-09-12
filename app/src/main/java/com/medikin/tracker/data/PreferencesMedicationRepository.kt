@@ -23,12 +23,20 @@ class PreferencesMedicationRepository(
     override val snapshot: StateFlow<TrackerSnapshot> = mutableSnapshot.asStateFlow()
 
     init {
-        mutate { MedicationReducer.pruneLogs(it, LocalDate.now()) }
+        mutate { MedicationReducer.materializeMissedHistory(it, LocalDate.now(), LocalDateTime.now()) }
     }
 
     @Synchronized
     override fun addMedicine(medicine: Medicine) = mutate {
         MedicationReducer.addMedicine(it, medicine)
+    }
+
+    @Synchronized
+    override fun updateMedicine(medicine: Medicine) = mutate {
+        MedicationReducer.updateMedicine(
+            MedicationReducer.materializeMissedHistory(it, LocalDate.now(), LocalDateTime.now()),
+            medicine,
+        )
     }
 
     @Synchronized
@@ -40,18 +48,57 @@ class PreferencesMedicationRepository(
     ) = mutate { MedicationReducer.recordDose(it, medicineId, time, status, at) }
 
     @Synchronized
+    override fun changeDoseStatus(
+        medicineId: String,
+        time: DoseTime,
+        status: DoseStatus?,
+        at: LocalDateTime,
+    ) = mutate { MedicationReducer.changeDoseStatus(it, medicineId, time, status, at) }
+
+    @Synchronized
+    override fun recordAsNeeded(medicineId: String, at: LocalDateTime) = mutate {
+        MedicationReducer.recordAsNeeded(it, medicineId, at)
+    }
+
+    @Synchronized
     override fun restock(medicineId: String, amount: Int) = mutate {
         MedicationReducer.restock(it, medicineId, amount)
     }
 
     @Synchronized
+    override fun pauseMedicine(medicineId: String, pausedUntil: LocalDate?) = mutate {
+        MedicationReducer.pauseMedicine(
+            MedicationReducer.materializeMissedHistory(it, LocalDate.now(), LocalDateTime.now()),
+            medicineId,
+            pausedUntil,
+        )
+    }
+
+    @Synchronized
     override fun deleteMedicine(medicineId: String) = mutate {
-        MedicationReducer.delete(it, medicineId)
+        MedicationReducer.delete(
+            MedicationReducer.materializeMissedHistory(it, LocalDate.now(), LocalDateTime.now()),
+            medicineId,
+        )
     }
 
     @Synchronized
     override fun updateCaregiver(caregiver: Caregiver) = mutate {
         it.copy(caregiver = caregiver)
+    }
+
+    @Synchronized
+    override fun synchronizeHistory(today: LocalDate) = mutate {
+        MedicationReducer.materializeMissedHistory(it, today, LocalDateTime.now())
+    }
+
+    @Synchronized
+    override fun replaceSnapshot(snapshot: TrackerSnapshot) = mutate {
+        MedicationReducer.materializeMissedHistory(
+            MedicationReducer.validateSnapshot(snapshot.withoutLegacyStarterData()),
+            LocalDate.now(),
+            LocalDateTime.now(),
+        )
     }
 
     private fun mutate(transform: (TrackerSnapshot) -> TrackerSnapshot) {

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextClearance
 import androidx.test.core.app.ApplicationProvider
 import com.medikin.tracker.data.MedicationRepository
 import com.medikin.tracker.domain.Caregiver
@@ -30,6 +31,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.time.LocalDateTime
+import java.time.LocalDate
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -71,6 +73,9 @@ class MedicineTrackerComposeTest {
         composeRule.onNodeWithTag("nav_medicines").performClick()
         composeRule.onNodeWithText("Medicine cabinet").assertIsDisplayed()
 
+        composeRule.onNodeWithTag("nav_history").performClick()
+        composeRule.onNodeWithText("History & insights").assertIsDisplayed()
+
         composeRule.onNodeWithTag("nav_family").performClick()
         composeRule.onNodeWithText("Family circle").assertIsDisplayed()
     }
@@ -80,7 +85,7 @@ class MedicineTrackerComposeTest {
         composeRule.onNodeWithTag("add_medicine").performClick()
         composeRule.onNodeWithTag("medicine_name").performTextInput("Calcium")
         composeRule.onNodeWithTag("medicine_dosage").performTextInput("1 tablet")
-        composeRule.onNodeWithTag("add_medicine_form").performScrollToIndex(6)
+        composeRule.onNodeWithTag("add_medicine_form").performScrollToIndex(12)
         composeRule.onNodeWithTag("save_medicine").performClick()
         composeRule.waitForIdle()
 
@@ -100,6 +105,32 @@ class MedicineTrackerComposeTest {
         composeRule.onNodeWithTag("nav_today").performClick()
         composeRule.onNodeWithText("Caring for Dad").assertIsDisplayed()
     }
+
+    @Test
+    fun `medicine can be edited from cabinet`() {
+        composeRule.onNodeWithTag("nav_medicines").performClick()
+        composeRule.onNodeWithTag("edit_test-med").performClick()
+        composeRule.onNodeWithTag("medicine_dosage").performTextClearance()
+        composeRule.onNodeWithTag("medicine_dosage").performTextInput("10 mg")
+        composeRule.onNodeWithTag("add_medicine_form").performScrollToIndex(12)
+        composeRule.onNodeWithTag("save_medicine").performClick()
+
+        assertTrue(repository.snapshot.value.medicines.single().dosage == "10 mg")
+        composeRule.onNodeWithText("10 mg", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun `taken dose can be corrected to skipped with stock restored`() {
+        composeRule.onNodeWithTag("today_list").performScrollToIndex(4)
+        composeRule.onNodeWithTag("take_test-med_08-00").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("change_test-med_08-00").performClick()
+        composeRule.onNodeWithText("Mark skipped").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue(repository.snapshot.value.logs.single().status == DoseStatus.SKIPPED)
+        assertTrue(repository.snapshot.value.medicines.single().stock == 2)
+    }
 }
 
 private class FakeMedicationRepository(initial: TrackerSnapshot) : MedicationRepository {
@@ -110,12 +141,28 @@ private class FakeMedicationRepository(initial: TrackerSnapshot) : MedicationRep
         mutableSnapshot.value = MedicationReducer.addMedicine(mutableSnapshot.value, medicine)
     }
 
+    override fun updateMedicine(medicine: Medicine) {
+        mutableSnapshot.value = MedicationReducer.updateMedicine(mutableSnapshot.value, medicine)
+    }
+
     override fun recordDose(medicineId: String, time: DoseTime, status: DoseStatus, at: LocalDateTime) {
         mutableSnapshot.value = MedicationReducer.recordDose(mutableSnapshot.value, medicineId, time, status, at)
     }
 
+    override fun changeDoseStatus(medicineId: String, time: DoseTime, status: DoseStatus?, at: LocalDateTime) {
+        mutableSnapshot.value = MedicationReducer.changeDoseStatus(mutableSnapshot.value, medicineId, time, status, at)
+    }
+
+    override fun recordAsNeeded(medicineId: String, at: LocalDateTime) {
+        mutableSnapshot.value = MedicationReducer.recordAsNeeded(mutableSnapshot.value, medicineId, at)
+    }
+
     override fun restock(medicineId: String, amount: Int) {
         mutableSnapshot.value = MedicationReducer.restock(mutableSnapshot.value, medicineId, amount)
+    }
+
+    override fun pauseMedicine(medicineId: String, pausedUntil: LocalDate?) {
+        mutableSnapshot.value = MedicationReducer.pauseMedicine(mutableSnapshot.value, medicineId, pausedUntil)
     }
 
     override fun deleteMedicine(medicineId: String) {
@@ -124,5 +171,13 @@ private class FakeMedicationRepository(initial: TrackerSnapshot) : MedicationRep
 
     override fun updateCaregiver(caregiver: Caregiver) {
         mutableSnapshot.value = mutableSnapshot.value.copy(caregiver = caregiver)
+    }
+
+    override fun synchronizeHistory(today: LocalDate) {
+        mutableSnapshot.value = MedicationReducer.materializeMissedHistory(mutableSnapshot.value, today)
+    }
+
+    override fun replaceSnapshot(snapshot: TrackerSnapshot) {
+        mutableSnapshot.value = snapshot
     }
 }

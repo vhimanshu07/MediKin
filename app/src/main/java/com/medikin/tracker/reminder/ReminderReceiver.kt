@@ -24,10 +24,13 @@ class ReminderReceiver : BroadcastReceiver() {
             ?.let(DoseTime::parse) ?: return
         val kind = intent.getStringExtra(ReminderScheduler.EXTRA_REMINDER_KIND)
             ?.let { runCatching { ReminderScheduler.ReminderKind.valueOf(it) }.getOrNull() } ?: return
+        val scheduledDate = intent.getStringExtra(ReminderScheduler.EXTRA_SCHEDULED_DATE)
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?: LocalDate.now()
         val medicine = app.repository.snapshot.value.medicines.firstOrNull { it.id == medicineId } ?: return
         val alreadyRecorded = app.repository.snapshot.value.logs.any {
             it.medicineId == medicineId && it.time == doseTime &&
-                it.date == LocalDate.now().toString() &&
+                it.date == scheduledDate.toString() &&
                 (it.status == DoseStatus.TAKEN || it.status == DoseStatus.SKIPPED)
         }
 
@@ -43,6 +46,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     action = "${context.packageName}.TAKEN.$medicineId.${doseTime.key}"
                     putExtra(ReminderScheduler.EXTRA_MEDICINE_ID, medicineId)
                     putExtra(ReminderScheduler.EXTRA_DOSE_TIME, doseTime.key)
+                    putExtra(ReminderScheduler.EXTRA_SCHEDULED_DATE, scheduledDate.toString())
                 }
                 val takenPendingIntent = PendingIntent.getBroadcast(
                     context,
@@ -53,7 +57,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 val notification = NotificationCompat.Builder(context, ReminderScheduler.DOSE_CHANNEL)
                     .setSmallIcon(R.drawable.ic_notification)
                     .setContentTitle("${doseTime.label} medicine is due")
-                    .setContentText("${medicine.name} · ${medicine.dosage} · ${medicine.instructions}")
+                    .setContentText("${medicine.name} · ${medicine.doseAt(doseTime).dosage ?: medicine.dosage} · ${medicine.instructions}")
                     .setPriority(NotificationCompat.PRIORITY_HIGH)
                     .setAutoCancel(true)
                     .setContentIntent(openIntent)
@@ -64,7 +68,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 MissedDoseNotifier.show(
                     context = context,
                     medicineName = medicine.name,
-                    doseLabel = "${medicine.dosage} · ${doseTime.label}",
+                    doseLabel = "${medicine.doseAt(doseTime).dosage ?: medicine.dosage} · ${doseTime.label}",
                     caregiver = app.repository.snapshot.value.caregiver,
                     parentName = app.repository.snapshot.value.caregiver.parentName,
                     notificationId = intent.action.hashCode(),

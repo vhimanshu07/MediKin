@@ -26,17 +26,20 @@
 
 ## About
 
-MediKin helps a family organize a parent's daily medicines without accounts, ads, analytics, or cloud storage. Add each medicine with one or more custom times, record whether a dose was taken or skipped, monitor remaining stock, and receive a family check-in alert when a dose is still unrecorded five minutes later.
+MediKin helps a family organize a parent's medicines without accounts, ads, analytics, or cloud storage. Add or edit each medicine with daily, weekday, interval, date-range, or as-needed schedules; correct dose records; monitor remaining stock; review adherence history; and receive a family check-in alert when a dose is still unrecorded five minutes later.
 
 Fresh installs contain no dummy medicines or preset names. The family profile controls the “Caring for …” subtitle and optional contact used by the dialer and pre-filled message actions.
 
 ## Highlights
 
 - Daily timeline with Upcoming, Due, Taken, Skipped, and Missed states
-- Multiple reminders per medicine using presets or any custom time
+- Editable schedules with specific weekdays, intervals, date ranges, per-time doses, and temporary pauses
+- As-needed medicine recording
 - Audible dose alerts and an automatic five-minute missed-dose follow-up
-- Idempotent dose recording and stock deduction
-- Refill warnings and one-tap restocking
+- Correctable Taken/Skipped records with automatic stock reconciliation
+- Weekly/monthly history, missed-dose trends, and per-medicine adherence
+- Refill warnings, custom restock quantities, stock units, and run-out estimates
+- Password-encrypted local backup and restore through Android's document picker
 - Editable parent and caregiver profile
 - One-tap dialer and pre-filled SMS handoff without phone or SMS permission
 - Alarm restoration after reboot or app update
@@ -59,7 +62,7 @@ TrackerViewModel
         ↓
 MedicationRepository
         ↓
-Preferences + JSON storage
+Preferences + JSON storage + encrypted backup files
 
 Domain models/reducer/planner ← Alarm scheduler + receivers
 ```
@@ -111,11 +114,11 @@ With an emulator or device connected:
 ./gradlew connectedDebugAndroidTest
 ```
 
-The current build passes 34 local tests, 3 connected-emulator UI tests, and Android lint with zero issues.
+The current build passes 46 local tests, 5 connected-emulator UI tests, and Android lint.
 
 ## Privacy and permissions
 
-MediKin stores medicine schedules, stock, dose history, and optional family-contact details only in the app's private local storage. Android cloud backup and cleartext traffic are disabled.
+MediKin stores medicine schedules, stock, dose history, and optional family-contact details in the app's private local storage. A user can explicitly create a password-encrypted local backup through Android's document picker. Android cloud backup and cleartext traffic are disabled.
 
 Requested permissions:
 

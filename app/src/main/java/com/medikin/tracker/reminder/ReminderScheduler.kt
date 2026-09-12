@@ -12,6 +12,8 @@ import com.medikin.tracker.domain.DosePlanner
 import com.medikin.tracker.domain.DoseTime
 import com.medikin.tracker.domain.Medicine
 import java.time.LocalDateTime
+import java.time.Instant
+import java.time.ZoneId
 
 class ReminderScheduler(private val context: Context) {
     private val alarmManager = context.getSystemService(AlarmManager::class.java)
@@ -55,22 +57,35 @@ class ReminderScheduler(private val context: Context) {
     }
 
     fun scheduleMedicine(medicine: Medicine, now: LocalDateTime = LocalDateTime.now()) {
-        medicine.times.forEach { time ->
-            schedule(medicine, time, ReminderKind.DOSE, DosePlanner.nextOccurrenceMillis(time, now))
-            schedule(
-                medicine,
-                time,
-                ReminderKind.MISSED,
-                DosePlanner.nextOccurrenceMillis(time, now, DosePlanner.MISSED_AFTER_MINUTES),
-            )
+        cancelCurrentPendingIntents(medicine)
+        DosePlanner.nextOccurrenceMillis(medicine, now)?.let { (dose, triggerAt) ->
+            schedule(medicine, dose.time, ReminderKind.DOSE, triggerAt, scheduledDate(triggerAt, 0))
         }
+        DosePlanner.nextOccurrenceMillis(medicine, now, DosePlanner.MISSED_AFTER_MINUTES)
+            ?.let { (dose, triggerAt) ->
+                schedule(
+                    medicine,
+                    dose.time,
+                    ReminderKind.MISSED,
+                    triggerAt,
+                    scheduledDate(triggerAt, DosePlanner.MISSED_AFTER_MINUTES),
+                )
+            }
     }
 
     fun cancelMedicine(medicine: Medicine) {
-        medicine.times.forEach { time ->
-            ReminderKind.entries.forEach { kind ->
-                alarmManager.cancel(pendingIntent(medicine, time, kind))
-            }
+        cancelCurrentPendingIntents(medicine)
+        // Cancel request identities used by versions before flexible schedules.
+        (medicine.times + medicine.effectiveScheduledDoses.map { it.time }).distinct().forEach { time ->
+            ReminderKind.entries.forEach { kind -> alarmManager.cancel(legacyPendingIntent(medicine, time, kind)) }
+        }
+    }
+
+    fun cancelAll(medicines: List<Medicine>) = medicines.forEach(::cancelMedicine)
+
+    private fun cancelCurrentPendingIntents(medicine: Medicine) {
+        ReminderKind.entries.forEach { kind ->
+            alarmManager.cancel(pendingIntent(medicine, DoseTime.MORNING, kind))
         }
     }
 
@@ -79,11 +94,12 @@ class ReminderScheduler(private val context: Context) {
         time: DoseTime,
         kind: ReminderKind,
         triggerAtMillis: Long,
+        scheduledDate: String,
     ) {
         alarmManager.setAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerAtMillis,
-            pendingIntent(medicine, time, kind),
+            pendingIntent(medicine, time, kind, scheduledDate),
         )
     }
 
@@ -91,12 +107,37 @@ class ReminderScheduler(private val context: Context) {
         medicine: Medicine,
         time: DoseTime,
         kind: ReminderKind,
+        scheduledDate: String = java.time.LocalDate.now().toString(),
     ): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
-            action = "${context.packageName}.REMINDER.${kind.name}.${medicine.id}.${time.key}"
+            action = "${context.packageName}.REMINDER.${kind.name}.${medicine.id}"
             putExtra(EXTRA_MEDICINE_ID, medicine.id)
             putExtra(EXTRA_DOSE_TIME, time.key)
             putExtra(EXTRA_REMINDER_KIND, kind.name)
+            putExtra(EXTRA_SCHEDULED_DATE, scheduledDate)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            intent.action.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun scheduledDate(triggerAtMillis: Long, delayMinutes: Long): String = Instant
+        .ofEpochMilli(triggerAtMillis)
+        .minusSeconds(delayMinutes * 60)
+        .atZone(ZoneId.systemDefault())
+        .toLocalDate()
+        .toString()
+
+    private fun legacyPendingIntent(
+        medicine: Medicine,
+        time: DoseTime,
+        kind: ReminderKind,
+    ): PendingIntent {
+        val intent = Intent(context, ReminderReceiver::class.java).apply {
+            action = "${context.packageName}.REMINDER.${kind.name}.${medicine.id}.${time.key}"
         }
         return PendingIntent.getBroadcast(
             context,
@@ -114,5 +155,6 @@ class ReminderScheduler(private val context: Context) {
         const val EXTRA_MEDICINE_ID = "medicine_id"
         const val EXTRA_DOSE_TIME = "dose_time"
         const val EXTRA_REMINDER_KIND = "reminder_kind"
+        const val EXTRA_SCHEDULED_DATE = "scheduled_date"
     }
 }
